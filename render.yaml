@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: vibelog-pro-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGO_URI
+        value: mongodb+srv://your-mongo-connection-string
+      - key: JWT_SECRET
+        value: your-super-secret-jwt-key
+      - key: CLIENT_URL
+        value: https://your-netlify-site.netlify.app
+      - key: CLOUDINARY_CLOUD_NAME
+        value: your-cloudinary-cloud-name
+      - key: CLOUDINARY_API_KEY
+        value: your-cloudinary-api-key
+      - key: CLOUDINARY_API_SECRET
+        value: your-cloudinary-api-secret
