@@ -21,7 +21,17 @@
 - [x] Style with Tailwind for responsive design
 
 ## Integration and Testing
-- [ ] Connect frontend to backend APIs
-- [ ] Test authentication flow
-- [ ] Test basic CRUD for posts and services
-- [ ] Run both servers locally
+- [x] Connect frontend to backend APIs
+- [x] Test authentication flow
+- [x] Test basic CRUD for posts and services
+- [x] Run both servers locally
+
+## Deployment Preparation
+- [x] Fix MongoDB connection warnings
+- [x] Create .env file for backend
+- [x] Build frontend for production
+- [x] Prepare render.yaml for Render deployment
+- [x] Prepare netlify.toml for Netlify deployment
+- [x] Update environment variables in render.yaml with actual values
+- [x] Deploy backend to Render
+- [x] Deploy frontend to Netlify

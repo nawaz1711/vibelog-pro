@@ -14,7 +14,7 @@ services:
       - key: JWT_SECRET
         value: your-super-secret-jwt-key
       - key: CLIENT_URL
-        value: https://your-netlify-site.netlify.app
+        value: https://690061eb5ef63020f095e46b--spiffy-moonbeam-69a1c3.netlify.app/
       - key: CLOUDINARY_CLOUD_NAME
         value: your-cloudinary-cloud-name
       - key: CLOUDINARY_API_KEY
