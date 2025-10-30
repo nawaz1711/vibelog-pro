@@ -16,6 +16,14 @@ app.use(express.json());
 // Connect Database
 connectDB();
 
+// Routes
+app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/posts', require('./routes/postRoutes'));
+app.use('/api/services', require('./routes/serviceRoutes'));
+app.use('/api/projects', require('./routes/projectRoutes'));
+app.use('/api/payments', require('./routes/paymentRoutes'));
+app.use('/api/admin', require('./routes/adminRoutes'));
+
 // Test route
 app.get('/', (req, res) => {
   res.send('🚀 MindScroll backend is running successfully!');
