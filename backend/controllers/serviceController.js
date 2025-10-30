@@ -1,136 +1,224 @@
 const Service = require('../models/Service');
-const User = require('../models/User');
 
+// @desc    Get all services
+// @route   GET /api/services
+// @access  Public
 const getServices = async (req, res) => {
   try {
-    const { category, search, minPrice, maxPrice } = req.query;
-    let query = {};
-    
-    if (category) query.category = category;
-    if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
-      ];
-    }
-    
-    let services = await Service.find(query)
-      .populate('creatorId', 'name profilePic rating bio skills')
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const services = await Service.find()
+      .populate('freelancer', 'name email')
       .sort({ createdAt: -1 })
-      .limit(50);
-    
-    // Filter by price range if provided
-    if (minPrice || maxPrice) {
-      services = services.filter(service => {
-        const prices = service.pricing.map(p => p.price);
-        const minServicePrice = Math.min(...prices);
-        const maxServicePrice = Math.max(...prices);
-        
-        if (minPrice && maxPrice) {
-          return minServicePrice >= minPrice && maxServicePrice <= maxPrice;
-        } else if (minPrice) {
-          return minServicePrice >= minPrice;
-        } else if (maxPrice) {
-          return maxServicePrice <= maxPrice;
-        }
-        return true;
-      });
-    }
-    
-    res.json(services);
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Service.countDocuments();
+
+    res.json({
+      success: true,
+      data: services,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Get featured services
+// @route   GET /api/services/featured
+// @access  Public
 const getFeaturedServices = async (req, res) => {
   try {
-    const services = await Service.find()
-      .populate('creatorId', 'name profilePic rating')
-      .sort({ rating: -1, orders: -1 })
-      .limit(8);
-    res.json(services);
+    const services = await Service.find({ featured: true })
+      .populate('freelancer', 'name email')
+      .sort({ rating: -1 })
+      .limit(6);
+
+    res.json({
+      success: true,
+      data: services
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Create a service
+// @route   POST /api/services
+// @access  Private (Freelancer only)
 const createService = async (req, res) => {
   try {
-    const { title, category, description, pricing, samples } = req.body;
-    const service = new Service({ 
-      creatorId: req.user.id, 
-      title, 
-      category, 
-      description, 
-      pricing: pricing || [],
-      samples: samples || []
+    const { title, description, category, price, deliveryTime, features } = req.body;
+
+    const service = await Service.create({
+      title,
+      description,
+      category,
+      price,
+      deliveryTime,
+      features,
+      freelancer: req.user.id
     });
-    await service.save();
-    const populatedService = await Service.findById(service._id)
-      .populate('creatorId', 'name profilePic');
-    res.status(201).json(populatedService);
+
+    const populatedService = await Service.findById(service._id).populate('freelancer', 'name email');
+
+    res.status(201).json({
+      success: true,
+      data: populatedService
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Get single service
+// @route   GET /api/services/:id
+// @access  Public
 const getServiceById = async (req, res) => {
   try {
     const service = await Service.findById(req.params.id)
-      .populate('creatorId', 'name profilePic bio skills rating socialLinks followers');
-    if (!service) return res.status(404).json({ message: 'Service not found' });
-    res.json(service);
+      .populate('freelancer', 'name email bio skills portfolio')
+      .populate('reviews.user', 'name email');
+
+    if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: service
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Update service
+// @route   PUT /api/services/:id
+// @access  Private (Service owner only)
 const updateService = async (req, res) => {
   try {
     const service = await Service.findById(req.params.id);
-    if (!service || service.creatorId.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Unauthorized' });
+
+    if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service not found'
+      });
     }
-    Object.assign(service, req.body);
-    await service.save();
-    res.json(service);
+
+    // Check if user owns the service
+    if (service.freelancer.toString() !== req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized to update this service'
+      });
+    }
+
+    const updatedService = await Service.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    ).populate('freelancer', 'name email');
+
+    res.json({
+      success: true,
+      data: updatedService
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Delete service
+// @route   DELETE /api/services/:id
+// @access  Private (Service owner only)
 const deleteService = async (req, res) => {
   try {
     const service = await Service.findById(req.params.id);
-    if (!service || service.creatorId.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Unauthorized' });
+
+    if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service not found'
+      });
     }
+
+    // Check if user owns the service
+    if (service.freelancer.toString() !== req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized to delete this service'
+      });
+    }
+
     await Service.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Service deleted' });
+
+    res.json({
+      success: true,
+      message: 'Service deleted successfully'
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Get services by category
+// @route   GET /api/services/category/:category
+// @access  Public
 const getServicesByCategory = async (req, res) => {
   try {
-    const { category } = req.params;
-    const services = await Service.find({ category })
-      .populate('creatorId', 'name profilePic rating')
+    const services = await Service.find({ category: req.params.category })
+      .populate('freelancer', 'name email')
       .sort({ rating: -1 });
-    res.json(services);
+
+    res.json({
+      success: true,
+      data: services
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
-module.exports = { 
-  getServices, 
+module.exports = {
+  getServices,
   getFeaturedServices,
-  createService, 
-  getServiceById, 
-  updateService, 
+  createService,
+  getServiceById,
+  updateService,
   deleteService,
   getServicesByCategory
 };

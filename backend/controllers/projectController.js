@@ -1,125 +1,191 @@
 const Project = require('../models/Project');
-const Service = require('../models/Service');
-const User = require('../models/User');
-const Notification = require('../models/Notification');
 
+// @desc    Get all projects
+// @route   GET /api/projects
+// @access  Private
 const getProjects = async (req, res) => {
   try {
-    const { status } = req.query;
-    let query = { $or: [{ clientId: req.user.id }, { creatorId: req.user.id }] };
-    if (status) query.status = status;
-    
-    const projects = await Project.find(query)
-      .populate('clientId', 'name profilePic email')
-      .populate('creatorId', 'name profilePic email')
-      .populate('serviceId', 'title')
+    const projects = await Project.find({
+      $or: [
+        { client: req.user.id },
+        { freelancer: req.user.id }
+      ]
+    })
+      .populate('client', 'name email')
+      .populate('freelancer', 'name email')
+      .populate('service', 'title')
       .sort({ createdAt: -1 });
-    res.json(projects);
+
+    res.json({
+      success: true,
+      data: projects
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Create a project
+// @route   POST /api/projects
+// @access  Private
 const createProject = async (req, res) => {
   try {
-    const { serviceId, amount, deadline, pricingTier } = req.body;
-    
-    // Verify service exists
-    const service = await Service.findById(serviceId);
-    if (!service) return res.status(404).json({ message: 'Service not found' });
-    
-    const project = new Project({
-      clientId: req.user.id,
-      creatorId: service.creatorId,
-      serviceId,
-      amount,
-      deadline: deadline ? new Date(deadline) : undefined,
-      pricingTier
+    const { serviceId, requirements, budget } = req.body;
+
+    const project = await Project.create({
+      service: serviceId,
+      client: req.user.id,
+      requirements,
+      budget
     });
-    
-    await project.save();
-    
-    // Create notification for creator
-    await Notification.create({
-      userId: service.creatorId,
-      message: `${req.user.name} hired you for "${service.title}"`,
-      type: 'project',
-      link: `/projects/${project._id}`
-    });
-    
+
     const populatedProject = await Project.findById(project._id)
-      .populate('clientId', 'name profilePic')
-      .populate('creatorId', 'name profilePic')
-      .populate('serviceId', 'title');
-    
-    res.status(201).json(populatedProject);
+      .populate('client', 'name email')
+      .populate('freelancer', 'name email')
+      .populate('service', 'title');
+
+    res.status(201).json({
+      success: true,
+      data: populatedProject
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Get single project
+// @route   GET /api/projects/:id
+// @access  Private
 const getProjectById = async (req, res) => {
   try {
     const project = await Project.findById(req.params.id)
-      .populate('clientId', 'name profilePic email')
-      .populate('creatorId', 'name profilePic email')
-      .populate('serviceId', 'title description pricing');
-    
-    if (!project) return res.status(404).json({ message: 'Project not found' });
-    
-    // Check authorization
-    const isAuthorized = project.clientId._id.toString() === req.user.id || 
-                         project.creatorId._id.toString() === req.user.id;
-    if (!isAuthorized) {
-      return res.status(403).json({ message: 'Unauthorized' });
+      .populate('client', 'name email')
+      .populate('freelancer', 'name email')
+      .populate('service', 'title description');
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
     }
-    
-    res.json(project);
+
+    // Check if user is involved in the project
+    if (project.client.toString() !== req.user.id && project.freelancer.toString() !== req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized to view this project'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: project
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Update project
+// @route   PUT /api/projects/:id
+// @access  Private
 const updateProject = async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
-    if (!project) return res.status(404).json({ message: 'Project not found' });
-    
-    const isAuthorized = project.clientId.toString() === req.user.id || 
-                         project.creatorId.toString() === req.user.id;
-    if (!isAuthorized) {
-      return res.status(403).json({ message: 'Unauthorized' });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
     }
-    
-    // Only allow certain fields to be updated
-    const { status, messages } = req.body;
-    if (status) project.status = status;
-    if (messages) project.messages = messages;
-    
-    await project.save();
-    res.json(project);
+
+    // Check if user is involved in the project
+    if (project.client.toString() !== req.user.id && project.freelancer.toString() !== req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized to update this project'
+      });
+    }
+
+    const updatedProject = await Project.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    )
+      .populate('client', 'name email')
+      .populate('freelancer', 'name email')
+      .populate('service', 'title');
+
+    res.json({
+      success: true,
+      data: updatedProject
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Complete project
+// @route   PUT /api/projects/:id/complete
+// @access  Private
 const completeProject = async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
-    if (!project) return res.status(404).json({ message: 'Project not found' });
-    
-    // Only client can mark as completed
-    if (project.clientId.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Only client can complete project' });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
     }
-    
+
+    // Check if user is the client
+    if (project.client.toString() !== req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Only client can mark project as completed'
+      });
+    }
+
     project.status = 'completed';
+    project.completedAt = new Date();
     await project.save();
-    
-    res.json({ message: 'Project completed', project });
+
+    const updatedProject = await Project.findById(req.params.id)
+      .populate('client', 'name email')
+      .populate('freelancer', 'name email')
+      .populate('service', 'title');
+
+    res.json({
+      success: true,
+      data: updatedProject
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
-module.exports = { getProjects, createProject, getProjectById, updateProject, completeProject };
+module.exports = {
+  getProjects,
+  createProject,
+  getProjectById,
+  updateProject,
+  completeProject
+};

@@ -1,184 +1,277 @@
 const Post = require('../models/Post');
-const Comment = require('../models/Comment');
 const User = require('../models/User');
-const Notification = require('../models/Notification');
 
+// @desc    Get all posts
+// @route   GET /api/posts
+// @access  Public
 const getPosts = async (req, res) => {
   try {
-    const { category, tag, type } = req.query;
-    let query = { isPublished: true };
-    
-    if (category) query.category = category;
-    if (tag) query.tags = { $in: [tag] };
-    if (type) query.type = type;
-    
-    const posts = await Post.find(query)
-      .populate('authorId', 'name profilePic bio')
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const posts = await Post.find()
+      .populate('author', 'name email')
       .sort({ createdAt: -1 })
-      .limit(50);
-    res.json(posts);
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Post.countDocuments();
+
+    res.json({
+      success: true,
+      data: posts,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Get trending posts
+// @route   GET /api/posts/trending
+// @access  Public
 const getTrendingPosts = async (req, res) => {
   try {
-    // Trending = high likes + views within last 7 days
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const posts = await Post.find({
-      isPublished: true,
-      createdAt: { $gte: weekAgo }
-    })
-      .populate('authorId', 'name profilePic')
-      .sort({ likes: -1, views: -1 })
+    const posts = await Post.find()
+      .populate('author', 'name email')
+      .sort({ likes: -1, createdAt: -1 })
       .limit(10);
-    res.json(posts);
+
+    res.json({
+      success: true,
+      data: posts
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Create a post
+// @route   POST /api/posts
+// @access  Private
 const createPost = async (req, res) => {
   try {
-    const { title, content, type, tags, category, coverImage } = req.body;
-    const post = new Post({
-      authorId: req.user.id,
+    const { title, content, tags, category } = req.body;
+
+    const post = await Post.create({
       title,
       content,
-      type,
-      tags: tags || [],
+      tags,
       category,
-      coverImage
+      author: req.user.id
     });
-    await post.save();
-    const populatedPost = await Post.findById(post._id).populate('authorId', 'name profilePic');
-    res.status(201).json(populatedPost);
+
+    const populatedPost = await Post.findById(post._id).populate('author', 'name email');
+
+    res.status(201).json({
+      success: true,
+      data: populatedPost
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Get single post
+// @route   GET /api/posts/:id
+// @access  Public
 const getPostById = async (req, res) => {
   try {
-    // Increment view count
-    await Post.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } });
-    
     const post = await Post.findById(req.params.id)
-      .populate('authorId', 'name profilePic bio skills socialLinks')
-      .populate({
-        path: 'comments',
-        populate: { path: 'userId', select: 'name profilePic' }
+      .populate('author', 'name email')
+      .populate('comments.user', 'name email');
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'Post not found'
       });
-    
-    if (!post) return res.status(404).json({ message: 'Post not found' });
-    res.json(post);
+    }
+
+    res.json({
+      success: true,
+      data: post
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Update post
+// @route   PUT /api/posts/:id
+// @access  Private
 const updatePost = async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
-    if (!post || post.authorId.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Unauthorized' });
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'Post not found'
+      });
     }
-    Object.assign(post, req.body);
-    await post.save();
-    res.json(post);
+
+    // Check if user owns the post
+    if (post.author.toString() !== req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized to update this post'
+      });
+    }
+
+    const updatedPost = await Post.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    ).populate('author', 'name email');
+
+    res.json({
+      success: true,
+      data: updatedPost
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Delete post
+// @route   DELETE /api/posts/:id
+// @access  Private
 const deletePost = async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
-    if (!post || post.authorId.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Unauthorized' });
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'Post not found'
+      });
     }
-    // Also delete all comments
-    await Comment.deleteMany({ postId: req.params.id });
+
+    // Check if user owns the post
+    if (post.author.toString() !== req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized to delete this post'
+      });
+    }
+
     await Post.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Post deleted' });
+
+    res.json({
+      success: true,
+      message: 'Post deleted successfully'
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
+// @desc    Like a post
+// @route   PUT /api/posts/:id/like
+// @access  Private
 const likePost = async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
-    if (!post) return res.status(404).json({ message: 'Post not found' });
-    
-    const userId = req.user.id;
-    const liked = post.likes.includes(userId);
-    
-    if (liked) {
-      post.likes = post.likes.filter(id => id.toString() !== userId);
-      await post.save();
-      res.json({ message: 'Post unliked', likes: post.likes });
-    } else {
-      post.likes.push(userId);
-      await post.save();
-      
-      // Create notification if not the author
-      if (post.authorId.toString() !== userId) {
-        await Notification.create({
-          userId: post.authorId,
-          message: `${req.user.name} liked your post`,
-          type: 'like',
-          link: `/blog/${post._id}`
-        });
-      }
-      
-      res.json({ message: 'Post liked', likes: post.likes });
-    }
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
 
-const addComment = async (req, res) => {
-  try {
-    const { text } = req.body;
-    const comment = new Comment({
-      postId: req.params.id,
-      userId: req.user.id,
-      text
-    });
-    await comment.save();
-    
-    // Add comment to post
-    await Post.findByIdAndUpdate(req.params.id, { $push: { comments: comment._id } });
-    
-    // Get the author of the post
-    const post = await Post.findById(req.params.id).populate('authorId');
-    
-    // Create notification if not the author
-    if (post.authorId._id.toString() !== req.user.id) {
-      await Notification.create({
-        userId: post.authorId._id,
-        message: `${req.user.name} commented on your post`,
-        type: 'comment',
-        link: `/blog/${req.params.id}`
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'Post not found'
       });
     }
-    
-    const populatedComment = await Comment.findById(comment._id).populate('userId', 'name profilePic');
-    res.status(201).json(populatedComment);
+
+    // Check if user already liked the post
+    if (post.likes.includes(req.user.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Post already liked'
+      });
+    }
+
+    post.likes.push(req.user.id);
+    await post.save();
+
+    res.json({
+      success: true,
+      message: 'Post liked successfully'
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
 };
 
-module.exports = { 
-  getPosts, 
+// @desc    Add comment to post
+// @route   POST /api/posts/:id/comment
+// @access  Private
+const addComment = async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'Post not found'
+      });
+    }
+
+    const newComment = {
+      user: req.user.id,
+      text: req.body.text
+    };
+
+    post.comments.push(newComment);
+    await post.save();
+
+    const updatedPost = await Post.findById(req.params.id)
+      .populate('author', 'name email')
+      .populate('comments.user', 'name email');
+
+    res.status(201).json({
+      success: true,
+      data: updatedPost
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+module.exports = {
+  getPosts,
   getTrendingPosts,
-  createPost, 
-  getPostById, 
-  updatePost, 
+  createPost,
+  getPostById,
+  updatePost,
   deletePost,
   likePost,
   addComment
