@@ -21,9 +21,9 @@ const Navbar = () => {
             <Link to="/freelancers" className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium">
               Freelancers
             </Link>
-            <button className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">
+            <Link to="/signin" className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">
               Sign In
-            </button>
+            </Link>
           </div>
         </div>
       </div>
