@@ -8,16 +8,16 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 10000
+        value: 5000
       - key: MONGO_URI
-        value: mongodb+srv://sknawazbasha172005_db_user:DJxgOOUXdWZpuX8G@nawaz.625kzbj.mongodb.net/?appName=Nawaz
+        value: YOUR_MONGO_URI_HERE
       - key: JWT_SECRET
-        value: 6080e9b4de89e2c48a0e1d13
+        value: YOUR_JWT_SECRET_HERE
       - key: CLIENT_URL
-        value: https://690061eb5ef63020f095e46b--spiffy-moonbeam-69a1c3.netlify.app
+        value: YOUR_CLIENT_URL_HERE
       - key: CLOUDINARY_CLOUD_NAME
-        value: Root
+        value: YOUR_CLOUDINARY_CLOUD_NAME_HERE
       - key: CLOUDINARY_API_KEY
-        value: 427815846583663
+        value: YOUR_CLOUDINARY_API_KEY_HERE
       - key: CLOUDINARY_API_SECRET
-        value: S6chcYUprSgmDqosxreX6Geo0hM
+        value: YOUR_CLOUDINARY_API_SECRET_HERE
