@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://your-backend-url.onrender.com/api';
+const API_URL = process.env.REACT_APP_API_URL || 'https://vibelog-pro-8.onrender.com/api';
 
 const Home = () => {
   const [trendingPosts, setTrendingPosts] = useState([]);

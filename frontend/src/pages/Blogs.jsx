@@ -9,7 +9,7 @@ const Blogs = () => {
   useEffect(() => {
     const fetchBlogs = async () => {
       try {
-        const response = await axios.get(`${process.env.REACT_APP_API_URL || 'https://your-backend-url.onrender.com/api'}/posts`);
+        const response = await axios.get(`${process.env.REACT_APP_API_URL || 'https://vibelog-pro-8.onrender.com/api'}/posts`);
         setBlogs(response.data);
         setLoading(false);
       } catch (err) {

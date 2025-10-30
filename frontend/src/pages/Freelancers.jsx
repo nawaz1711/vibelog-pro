@@ -9,7 +9,7 @@ const Freelancers = () => {
   useEffect(() => {
     const fetchFreelancers = async () => {
       try {
-        const response = await axios.get(`${process.env.REACT_APP_API_URL || 'https://your-backend-url.onrender.com/api'}/services`);
+        const response = await axios.get(`${process.env.REACT_APP_API_URL || 'https://vibelog-pro-8.onrender.com/api'}/services`);
         // Transform service data to freelancer format
         const transformedFreelancers = response.data.map(service => ({
           _id: service._id,
